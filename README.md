@@ -9,6 +9,7 @@ A Chrome extension for YouTube. Turn on Queue Mode, then click videos in any fee
 ## Features
 
 - **One-click queueing.** In Queue Mode, a click on a thumbnail or title adds the video. A second click removes it. Queued cards show a red outline and a `QUEUED #n` badge.
+- **YouTube's own queue gets framed too.** Videos added through YouTube's built-in "Add to queue" menu, even with Queue Mode off, get the same red outline with an `IN YT QUEUE` badge. Nothing is drawn inside YouTube's queue panel, and clicking an item there plays it as usual. This detection uses the English menu label for now.
 - **Normal browsing still works.** Ctrl/Cmd-click or middle-click opens a new tab as usual. Turn Queue Mode off and clicks behave normally again.
 - **Play all.** Plays the whole queue as a YouTube playlist. You don't need an account or an API key.
 - **Daily playlists.** Every video you queue is also filed under that day's local date. You can replay or copy any past day.

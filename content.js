@@ -13,14 +13,22 @@
     "ytd-compact-video-renderer",
     "ytd-grid-video-renderer",
     "ytd-playlist-video-renderer",
-    "ytd-playlist-panel-video-renderer",
     "ytd-reel-item-renderer",
     "yt-lockup-view-model",
     "ytm-shorts-lockup-view-model",
     "ytm-shorts-lockup-view-model-v2",
   ].join(",");
+  // YouTube's own queue/playlist panel and the miniplayer: never marked, and
+  // clicks there always pass through so items in it still play.
+  const PANEL = "ytd-playlist-panel-renderer, ytd-miniplayer";
+  const ADD_TO_QUEUE = /^\s*add to queue\s*$/i;
 
   const state = { queueMode: false, queue: [], archives: {}, panelOpen: false };
+
+  // Videos added with YouTube's own "Add to queue" (works with Queue Mode
+  // off). id -> time added. Per tab, like YouTube's queue itself.
+  const nativeQueue = new Map();
+  let lastMenu = null; // card whose menu button was clicked last
 
   // Local calendar date. toISOString() would give the UTC date and file
   // evening sessions under tomorrow for anyone west of Greenwich.
@@ -121,6 +129,63 @@
     }
   }
 
+  // ---------- YouTube's own "Add to queue" ----------
+  // The three-dot menu opens in a popup outside the card, so remember which
+  // card opened it, then catch the "Add to queue" item. Thumbnail hover
+  // buttons sit inside the card and resolve directly.
+
+  const cardId = (card) => {
+    for (const a of card.querySelectorAll('a[href*="/watch?v="], a[href*="/shorts/"]')) {
+      const id = idFromHref(a.href);
+      if (id) return id;
+    }
+    return null;
+  };
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (!t || t.closest(PANEL)) return;
+      const card = t.closest(CARD);
+      if (card && t.closest("button")) {
+        const id = cardId(card);
+        if (id) lastMenu = { id, at: Date.now() };
+      }
+      const labelled = t.closest("[aria-label]");
+      if (card && labelled && ADD_TO_QUEUE.test(labelled.getAttribute("aria-label"))) {
+        const id = cardId(card);
+        if (id) addNative(id);
+        return;
+      }
+      const item = t.closest("ytd-menu-service-item-renderer, yt-list-item-view-model, tp-yt-paper-item");
+      if (item && ADD_TO_QUEUE.test(item.textContent) && lastMenu && Date.now() - lastMenu.at < 60000) {
+        addNative(lastMenu.id);
+      }
+    },
+    true
+  );
+
+  function addNative(id) {
+    nativeQueue.set(id, Date.now());
+    scheduleMark();
+  }
+
+  // When YouTube's queue panel is rendered (watch page), it is the truth:
+  // drop anything no longer in it, such as after its Clear button. Adds from
+  // the last few seconds are kept while the panel catches up.
+  function syncNative() {
+    const items = document.querySelectorAll("ytd-playlist-panel-renderer ytd-playlist-panel-video-renderer");
+    if (!items.length) return;
+    const inPanel = new Set();
+    for (const it of items) {
+      const id = cardId(it);
+      if (id) inPanel.add(id);
+    }
+    const now = Date.now();
+    for (const [id, at] of nativeQueue) if (!inPanel.has(id) && now - at > 5000) nativeQueue.delete(id);
+  }
+
   // ---------- click capture ----------
   // Capture phase on window runs before YouTube's own navigation handlers.
   // Ctrl/Cmd/Shift/middle clicks pass through so "open in new tab" still works.
@@ -133,7 +198,7 @@
       const path = e.composedPath();
       if (path.includes(host)) return;
       const link = path.find((n) => n instanceof HTMLAnchorElement && n.href);
-      if (!link) return;
+      if (!link || link.closest(PANEL)) return;
       const id = idFromHref(link.href);
       if (!id) return;
       e.preventDefault();
@@ -150,8 +215,9 @@
   pageStyle.textContent = `
     html.ytq-on a[href*="/watch?v="], html.ytq-on a[href*="/shorts/"] { cursor: copy !important; }
     [data-ytq] { outline: 3px solid #ff0033 !important; outline-offset: 3px; border-radius: 12px; position: relative; }
+    [data-ytq="yt"]::after { background: #09090b; border: 1px solid #ff0033; }
     [data-ytq]::after {
-      content: "QUEUED " attr(data-ytq-n);
+      content: attr(data-ytq-n);
       position: absolute; top: 8px; left: 8px; z-index: 50; pointer-events: none;
       background: #ff0033; color: #fff; padding: 4px 7px; border-radius: 6px;
       font: 700 11px/1 Roboto, Arial, sans-serif; letter-spacing: .05em;
@@ -163,14 +229,17 @@
   // recomputed from the live links every pass instead of trusted.
   function mark() {
     document.documentElement.classList.toggle("ytq-on", state.queueMode);
+    syncNative();
     const pos = new Map(state.queue.map((v, i) => [v.id, i + 1]));
-    const want = new Map();
-    if (pos.size) {
+    const want = new Map(); // card -> [kind, label]
+    if (pos.size || nativeQueue.size) {
       for (const a of document.querySelectorAll('a[href*="/watch?v="], a[href*="/shorts/"]')) {
         const id = idFromHref(a.href);
-        if (!id || !pos.has(id)) continue;
+        if (!id || a.closest(PANEL)) continue;
         const card = a.closest(CARD);
-        if (card && !want.has(card)) want.set(card, id);
+        if (!card || want.has(card)) continue;
+        if (pos.has(id)) want.set(card, ["ext", `QUEUED #${pos.get(id)}`]);
+        else if (nativeQueue.has(id)) want.set(card, ["yt", "IN YT QUEUE"]);
       }
     }
     for (const el of document.querySelectorAll("[data-ytq]")) {
@@ -179,10 +248,9 @@
         el.removeAttribute("data-ytq-n");
       }
     }
-    for (const [card, id] of want) {
-      if (card.dataset.ytq !== id) card.dataset.ytq = id;
-      const n = `#${pos.get(id)}`;
-      if (card.dataset.ytqN !== n) card.dataset.ytqN = n;
+    for (const [card, [kind, label]] of want) {
+      if (card.dataset.ytq !== kind) card.dataset.ytq = kind;
+      if (card.dataset.ytqN !== label) card.dataset.ytqN = label;
     }
   }
 
@@ -195,7 +263,7 @@
     }, 400);
   };
   new MutationObserver(() => {
-    if (state.queue.length) scheduleMark();
+    if (state.queue.length || nativeQueue.size) scheduleMark();
   }).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("yt-navigate-finish", scheduleMark);
 
