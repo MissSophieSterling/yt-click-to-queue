@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Click-to-Queue for YouTube</title>
+<meta name="description" content="A free Chrome extension: turn on Queue Mode and queue YouTube videos with one click. Every day's picks are saved as a dated playlist.">
+<meta property="og:title" content="Click-to-Queue for YouTube">
+<meta property="og:description" content="One mindless, simple click to queue a YouTube video. Free, open source, storage permission only.">
+<meta property="og:image" content="https://misssophiesterling.github.io/yt-click-to-queue/icon.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b;
+  --panel: #111114;
+  --panel-2: #18181c;
+  --line: #26262c;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --red: #ff0033;
+  --red-mid: #a80024;
+  --red-deep: #5c0014;
+  --radius: 14px;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 17px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+.wrap { width: min(1080px, 100% - 32px); margin-inline: auto; }
+
+/* ---------- Hero ---------- */
+.hero {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 56px 0 72px;
+  position: relative;
+  isolation: isolate;
+}
+.hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(60% 45% at 50% 18%, rgba(255,0,51,.10), transparent 70%);
+  z-index: -1;
+}
+.hero-inner { text-align: center; max-width: 760px; }
+#logo {
+  width: 168px; height: 168px;
+  overflow: visible;
+  cursor: pointer;
+  display: block;
+  margin: 0 auto 28px;
+  -webkit-tap-highlight-color: transparent;
+}
+#logo .tile { fill: #0d0d10; stroke: var(--line); stroke-width: 1.2; }
+#logo .thumb { transform-box: fill-box; transform-origin: center; }
+.eyebrow {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--red);
+  margin: 0 0 14px;
+}
+h1 {
+  font-size: clamp(34px, 6vw, 58px);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  margin: 0 0 26px;
+  font-weight: 700;
+}
+.story {
+  font-size: clamp(17px, 2.1vw, 20px);
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0 auto 34px;
+  max-width: 680px;
+  text-wrap: pretty;
+}
+.story em { color: var(--text); font-style: normal; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: 600 15px/1 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .15s;
+}
+.btn:hover { border-color: #3a3a42; background: var(--panel-2); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.primary:hover { background: #ff1f4b; }
+.btn svg { width: 16px; height: 16px; }
+.reveal { opacity: 0; transform: translateY(14px); }
+.reveal.in { opacity: 1; transform: none; transition: opacity .8s ease, transform .8s cubic-bezier(.2,.8,.2,1); }
+.scroll-hint {
+  position: absolute; bottom: 22px; left: 50%; translate: -50% 0;
+  color: var(--faint); font: 500 12px var(--mono); letter-spacing: .1em;
+  text-decoration: none;
+}
+
+/* ---------- Sections ---------- */
+section { padding: 88px 0; border-top: 1px solid #16161a; }
+h2 {
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -.015em;
+  line-height: 1.1;
+  margin: 0 0 12px;
+}
+.lede { color: var(--muted); margin: 0 0 36px; max-width: 620px; }
+kbd {
+  font: 500 13px var(--mono);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 2px 7px;
+  color: var(--text);
+}
+
+/* ---------- Demo ---------- */
+.demo {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #0c0c0f;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 30px 80px -40px rgba(255,0,51,.25);
+}
+.demo-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.dot { width: 11px; height: 11px; border-radius: 50%; background: #2a2a30; }
+.url {
+  margin-left: 10px; flex: 1;
+  font: 500 12.5px var(--mono); color: var(--faint);
+  background: #0c0c0f; border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 22px 16px;
+  padding: 22px 20px 96px;
+}
+.card {
+  position: relative;
+  border-radius: 12px;
+  cursor: pointer;
+  outline: 3px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color .2s, transform .15s;
+  user-select: none;
+}
+.card:active { transform: scale(.98); }
+.demo.on .card { cursor: copy; }
+.card.q { outline-color: var(--red); }
+.thumb-img {
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.thumb-img .dur {
+  position: absolute; right: 6px; bottom: 6px;
+  background: rgba(0,0,0,.8); color: #fff;
+  font: 600 11.5px var(--sans); padding: 2px 5px; border-radius: 4px;
+}
+.badge {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  background: var(--red); color: #fff;
+  font: 700 11px/1 var(--sans); letter-spacing: .04em;
+  padding: 5px 7px; border-radius: 5px;
+  opacity: 0; transform: scale(.7);
+  transition: opacity .2s, transform .25s cubic-bezier(.3,1.6,.5,1);
+}
+.card.q .badge { opacity: 1; transform: none; }
+.meta { display: flex; gap: 10px; padding: 10px 2px 0; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; }
+.meta h3 { font-size: 14.5px; line-height: 1.35; margin: 0 0 3px; font-weight: 600; }
+.meta p { font-size: 13px; color: var(--faint); margin: 0; line-height: 1.4; }
+
+.pill {
+  position: absolute; left: 16px; bottom: 16px; z-index: 5;
+  display: flex; align-items: stretch;
+  background: #0c0c0f; border: 1px solid var(--line);
+  border-radius: 999px; overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0,0,0,.6);
+  font: 600 13.5px/1 var(--sans);
+}
+.pill button {
+  background: none; border: 0; color: var(--text);
+  font: inherit; cursor: pointer; padding: 11px 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.pill .mode .led { width: 9px; height: 9px; border-radius: 50%; background: #3f3f46; transition: background .2s, box-shadow .2s; }
+.demo.on .pill .mode .led { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.pill .count { border-left: 1px solid var(--line); min-width: 44px; justify-content: center; }
+.demo.on .pill { border-color: var(--red-mid); }
+.pill .count.bump { animation: bump .35s; }
+@keyframes bump { 40% { transform: scale(1.35); color: var(--red); } }
+
+.qpanel {
+  position: absolute; left: 16px; bottom: 66px; z-index: 6;
+  width: min(330px, calc(100% - 32px));
+  background: #0c0c0f; border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  opacity: 0; transform: translateY(10px) scale(.98); pointer-events: none;
+  transition: opacity .2s, transform .2s;
+}
+.qpanel.open { opacity: 1; transform: none; pointer-events: auto; }
+.qpanel h4 { margin: 0 0 10px; font-size: 14px; display: flex; justify-content: space-between; }
+.qpanel h4 span { color: var(--faint); font-weight: 500; }
+.qlist { list-style: none; margin: 0 0 12px; padding: 0; max-height: 210px; overflow: auto; }
+.qlist li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 4px; border-bottom: 1px solid #1c1c21; font-size: 13px;
+}
+.qlist li .n { color: var(--red); font: 600 12px var(--mono); width: 18px; }
+.qlist li .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qlist li button { background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 16px; padding: 0 4px; }
+.qlist li button:hover { color: var(--red); }
+.qlist .empty { color: var(--faint); border: 0; }
+.qactions { display: flex; gap: 8px; }
+.qactions button {
+  flex: 1; padding: 9px 6px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  font: 600 12.5px var(--sans); cursor: pointer;
+}
+.qactions .play { background: var(--red); border-color: var(--red); }
+.day { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; }
+.day b { color: var(--text); font: 500 12.5px var(--mono); }
+
+.hint {
+  position: absolute; left: 50%; top: 58px; translate: -50% 0; z-index: 4;
+  background: var(--red); color: #fff; font: 600 13px var(--sans);
+  padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(255,0,51,.35);
+  transition: opacity .3s;
+  pointer-events: none;
+}
+.hint.gone { opacity: 0; }
+.toast {
+  position: absolute; right: 16px; bottom: 16px; z-index: 7;
+  max-width: min(340px, calc(100% - 32px));
+  background: var(--text); color: var(--bg);
+  font: 600 13.5px/1.4 var(--sans);
+  padding: 11px 14px; border-radius: 10px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: none; }
+.lost {
+  position: absolute; inset: 0; z-index: 3;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  background: rgba(9,9,11,.82);
+  font: 600 13px var(--sans); color: var(--muted);
+  animation: fade 1.4s forwards;
+}
+@keyframes fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- Install ---------- */
+.tabs { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px; margin-bottom: 22px; }
+.tabs button {
+  border: 0; background: none; color: var(--muted);
+  font: 600 14px var(--sans); padding: 9px 16px; border-radius: 999px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--red); color: #fff; }
+.tabpanel[hidden] { display: none; }
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: s; }
+.steps > li {
+  counter-increment: s;
+  display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: start;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.steps > li::before {
+  content: counter(s);
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); color: var(--muted);
+  font: 600 15px var(--mono);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.steps > li.done { border-color: #2f1a20; }
+.steps > li.done::before { content: "✓"; background: var(--red); border-color: var(--red); color: #fff; }
+.steps h3 { margin: 6px 0 4px; font-size: 16.5px; }
+.steps p { margin: 0; color: var(--muted); font-size: 15px; }
+.steps .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.code {
+  display: flex; align-items: center; gap: 10px;
+  background: #0c0c0f; border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 8px 8px 14px; margin-top: 12px;
+  font: 500 13.5px var(--mono); color: var(--text);
+  max-width: 100%;
+}
+.code span { flex: 1; overflow-x: auto; white-space: nowrap; }
+.copy {
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  font: 600 12.5px var(--sans); padding: 7px 11px; border-radius: 7px; cursor: pointer; flex: none;
+}
+.copy.ok { background: var(--red); border-color: var(--red); }
+.prompt {
+  background: #0c0c0f; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; margin: 0;
+  font: 500 13px/1.6 var(--mono); color: var(--muted);
+  white-space: pre-wrap; max-height: 260px; overflow: auto;
+}
+.why {
+  margin-top: 26px; padding: 16px 18px;
+  border-left: 3px solid var(--red); background: var(--panel); border-radius: 0 10px 10px 0;
+  color: var(--muted); font-size: 15px;
+}
+.why b { color: var(--text); }
+
+/* ---------- Features ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.feat {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 22px; transition: border-color .25s, transform .25s;
+}
+.feat:hover { border-color: var(--red-mid); transform: translateY(-3px); }
+.feat .ico { width: 34px; height: 34px; color: var(--red); margin-bottom: 12px; }
+.feat h3 { margin: 0 0 6px; font-size: 17px; }
+.feat p { margin: 0; color: var(--muted); font-size: 15px; }
+.shot { margin-top: 36px; display: flex; justify-content: center; }
+.shot img { width: min(380px, 100%); border-radius: 14px; border: 1px solid var(--line); }
+
+footer { padding: 48px 0 64px; border-top: 1px solid #16161a; color: var(--faint); font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+footer a { color: var(--muted); }
+
+@media (max-width: 560px) {
+  section { padding: 64px 0; }
+  .feed { grid-template-columns: 1fr 1fr; gap: 16px 10px; padding: 14px 12px 90px; }
+  .meta .avatar { display: none; }
+  .meta h3 { font-size: 13px; }
+  .hint { font-size: 12px; }
+  .url { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner wrap">
+    <svg id="logo" viewBox="0 0 128 128" role="img" aria-label="Click-to-Queue logo: three stacked thumbs up">
+      <title>Click to replay</title>
+      <defs>
+        <path id="t" d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
+      </defs>
+      <rect class="tile" x=".6" y=".6" width="126.8" height="126.8" rx="28"/>
+      <g stroke="#09090b" stroke-width="1.6" stroke-linejoin="round" paint-order="stroke">
+        <g class="thumb" data-from="tl"><use href="#t" transform="translate(9 8) scale(3)" fill="#5c0014"/></g>
+        <g class="thumb" data-from="tr"><use href="#t" transform="translate(24 23) scale(3)" fill="#a80024"/></g>
+        <g class="thumb" data-from="br"><use href="#t" transform="translate(39 38) scale(3)" fill="#ff0033"/></g>
+      </g>
+    </svg>
+
+    <p class="eyebrow reveal">Click-to-Queue for YouTube</p>
+    <h1 class="reveal">One mindless, simple click.</h1>
+    <p class="story reveal">Those lazy days, or busy nights, you just want a playlist to run in the background- except, instead of zoning out or zoning in, you've found yourself painfully queueing up videos; load the feed, click the video's 'more options', add to queue- if you misclick, you are taken to another page, and now you've lost your video. A painful process- one which should really be a feature or a simple 1 click... <em>one mindless simple click- so that you can carry on with yourself...</em></p>
+    <div class="cta reveal">
+      <a class="btn primary" href="#install">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>
+        Get it free
+      </a>
+      <a class="btn" href="#try">Try it right here</a>
+      <a class="btn" href="https://github.com/MissSophieSterling/yt-click-to-queue">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        Source on GitHub
+      </a>
+    </div>
+  </div>
+  <a class="scroll-hint reveal" href="#try">SCROLL ↓</a>
+</header>
+
+<main>
+  <section id="try">
+    <div class="wrap">
+      <h2>Try it right here</h2>
+      <p class="lede">This is a stand-in feed that works like the real extension. Turn on Queue Mode (or press <kbd>Alt</kbd>+<kbd>Q</kbd>), then click a few videos. Click one again to take it back out. Then turn it off and click a video to see what you've been putting up with.</p>
+
+      <div class="demo" id="demo">
+        <div class="demo-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="url">youtube.com/feed/subscriptions</span>
+        </div>
+        <div class="hint" id="hint">Turn on Queue Mode, bottom left ↙</div>
+        <div class="feed" id="feed"></div>
+
+        <div class="qpanel" id="qpanel" aria-live="polite">
+          <h4>Your queue <span id="qcount">0 videos</span></h4>
+          <ul class="qlist" id="qlist"></ul>
+          <div class="qactions">
+            <button class="play" id="qplay">▶ Play all</button>
+            <button id="qcopy">Copy links</button>
+            <button id="qclear">Clear</button>
+          </div>
+          <div class="day">Daily playlist <b id="qday"></b></div>
+        </div>
+
+        <div class="pill">
+          <button class="mode" id="mode" aria-pressed="false"><span class="led"></span><span id="modeText">Queue Mode off</span></button>
+          <button class="count" id="count" aria-label="Open queue">0</button>
+        </div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Set it up in about a minute</h2>
+      <p class="lede">Free and open source. Pick whichever way suits you.</p>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" aria-controls="byhand" id="tab-hand">By hand</button>
+        <button role="tab" aria-selected="false" aria-controls="byai" id="tab-ai">Let your AI do it</button>
+      </div>
+
+      <div class="tabpanel" id="byhand" role="tabpanel" aria-labelledby="tab-hand">
+        <ol class="steps" id="steps">
+          <li>
+            <div>
+              <h3>Download and unzip</h3>
+              <p>You get a folder called <b>yt-click-to-queue</b>. Keep it somewhere it won't get deleted, like Documents. Chrome runs the extension from that folder.</p>
+              <div class="row">
+                <a class="btn primary" href="https://github.com/MissSophieSterling/yt-click-to-queue/releases/latest/download/yt-click-to-queue.zip">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>
+                  Download .zip
+                </a>
+              </div>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Open your extensions page</h3>
+              <p>Browsers don't let a web page link here, so paste this into the address bar. Edge uses <b>edge://extensions</b>, Brave uses <b>brave://extensions</b>.</p>
+              <div class="code"><span>chrome://extensions</span><button class="copy" data-copy="chrome://extensions">Copy</button></div>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Turn on Developer mode</h3>
+              <p>It's the switch in the top right corner of that page.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Click Load unpacked</h3>
+              <p>Pick the <b>yt-click-to-queue</b> folder (the one with manifest.json inside). Pin it from the puzzle-piece menu if you like.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Open YouTube</h3>
+              <p>The <b>Queue Mode</b> pill shows up at the bottom left. Press <kbd>Alt</kbd>+<kbd>Q</kbd> and start clicking.</p>
+              <div class="row"><a class="btn" href="https://www.youtube.com" target="_blank" rel="noopener">Open YouTube ↗</a></div>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <div class="tabpanel" id="byai" role="tabpanel" aria-labelledby="tab-ai" hidden>
+        <p class="lede" style="margin-bottom:16px">Paste this into Claude Code, Codex, Cursor or any assistant that can run commands. It downloads the extension, checks it, and walks you through the clicks Chrome makes you do yourself.</p>
+        <div class="row" style="margin-bottom:12px"><button class="btn primary copy-prompt" id="copyPrompt">Copy the prompt</button></div>
+<pre class="prompt" id="prompt">Install the Chrome extension "YT Click-to-Queue &amp; Auto-Playlist" for me from
+https://github.com/MissSophieSterling/yt-click-to-queue
+
+Do these steps in order. Tell me plainly what you did after each one.
+
+1. Pick the install folder: ~/yt-click-to-queue on macOS or Linux,
+   %USERPROFILE%\yt-click-to-queue on Windows. If the folder already exists,
+   update it with `git pull` and do not clone again.
+2. Get the code:
+   - If git is available, run:
+     git clone https://github.com/MissSophieSterling/yt-click-to-queue.git &lt;install folder&gt;
+   - If git is not available, download
+     https://github.com/MissSophieSterling/yt-click-to-queue/releases/latest/download/yt-click-to-queue.zip
+     and unzip it so the install folder holds manifest.json.
+3. Check the download. The folder must contain manifest.json, content.js,
+   background.js, and an icons folder holding icon-16.png, icon-32.png,
+   icon-48.png and icon-128.png. Open manifest.json and confirm that
+   "manifest_version" is 3 and that the only permission is "storage". If any
+   file is missing, or the manifest asks for more permissions, stop and tell me.
+4. Open chrome://extensions in Chrome, or edge://extensions in Edge, or
+   brave://extensions in Brave. On macOS you can run:
+   open -a "Google Chrome" "chrome://extensions"
+   Browsers do not let scripts install unpacked extensions, so the next part is
+   up to me. Give me these clicks one at a time:
+   a. Turn on "Developer mode" (top right).
+   b. Click "Load unpacked".
+   c. Select the install folder (the folder that holds manifest.json).
+   d. Optional: click the puzzle-piece icon in the toolbar and pin
+      "YT Click-to-Queue".
+5. Ask me to open https://www.youtube.com and confirm that a "Queue Mode" pill
+   appears at the bottom left. If it does not appear, ask me to reload the
+   YouTube tab and check again.
+6. Finish with this quick guide:
+   - Alt+Q, the toolbar icon, or the pill turns Queue Mode on or off.
+   - With Queue Mode on, clicking a video queues it and clicking it again
+     removes it. Ctrl/Cmd-click still opens the video in a new tab.
+   - The number on the pill opens the queue. From there: Play all, Copy links, Clear.
+   - Every video you queue is also saved to that day's playlist (YYYY-MM-DD)
+     under "Daily playlists", and Clear does not delete it.
+   - To update later: run `git pull` in the install folder, then click the
+     reload arrow on the extension's card in chrome://extensions.
+
+Do not change any browser settings beyond what is listed above, and do not
+install anything else.</pre>
+      </div>
+
+      <p class="why"><b>Why a folder and not one click?</b> Chrome only does one-click installs from the Chrome Web Store. Until it's listed there, Chrome loads it from a folder on your computer. The code is short and readable, and the only permission it asks for is storage.</p>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <p class="lede">Everything happens in your browser. No account, no API key, no tracking.</p>
+      <div class="grid">
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3 5 21M19 3l-4 18"/><path d="M4 8h17M3 16h17"/></svg>
+          <h3>One click to queue</h3>
+          <p>With Queue Mode on, a click on any thumbnail or title queues it. Click again to take it out. Nothing navigates away.</p>
+        </div>
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+          <h3>A playlist for every day</h3>
+          <p>Each pick is filed under today's date. Replay or copy any day later, even after you clear the queue.</p>
+        </div>
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <h3>Play all</h3>
+          <p>Plays the whole queue as one YouTube playlist, up to YouTube's limit of 50 videos.</p>
+        </div>
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2" stroke-dasharray="3 2.4"/><path d="M8 21h8"/></svg>
+          <h3>Sees YouTube's own queue</h3>
+          <p>Videos you add with YouTube's "Add to queue" get the same red frame, so you can see what's lined up.</p>
+        </div>
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+          <h3>Keyboard first</h3>
+          <p><kbd>Alt</kbd>+<kbd>Q</kbd> toggles Queue Mode, <kbd>Esc</kbd> closes the panel, and Ctrl or Cmd-click still opens a new tab.</p>
+        </div>
+        <div class="feat">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <h3>Private by design</h3>
+          <p>One permission: storage. Your queue never leaves your browser.</p>
+        </div>
+      </div>
+      <div class="shot"><img src="panel.png" alt="The real extension's queue panel on YouTube, with Play all, Copy links and a daily playlist" loading="lazy"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MIT licence. Thumbs-up glyph from Google's Material Icons (Apache-2.0). Not affiliated with YouTube or Google.</span>
+    <a href="https://github.com/MissSophieSterling/yt-click-to-queue">github.com/MissSophieSterling/yt-click-to-queue</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Logo: each thumb flies in from a corner of the screen and stacks ---------- */
+  const logo = document.getElementById("logo");
+  const thumbs = [...logo.querySelectorAll(".thumb")];
+  const tile = logo.querySelector(".tile");
+  const reveals = [...document.querySelectorAll(".reveal")];
+  let anims = [];
+
+  function play() {
+    anims.forEach((a) => a.cancel());
+    anims = [];
+    if (reduce) { reveals.forEach((el) => el.classList.add("in")); return; }
+    const r = logo.getBoundingClientRect();
+    const k = 128 / r.width; // screen px -> SVG units
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const vw = innerWidth, vh = innerHeight;
+    const corner = { tl: [0, 0], tr: [vw, 0], br: [vw, vh], bl: [0, vh] };
+    const tilt = { tl: -28, tr: 24, br: 18, bl: -18 };
+
+    thumbs.forEach((g, i) => {
+      const [x, y] = corner[g.dataset.from];
+      const dx = (x - cx) * k, dy = (y - cy) * k;
+      anims.push(g.animate([
+        { transform: `translate(${dx}px, ${dy}px) rotate(${tilt[g.dataset.from]}deg) scale(1.6)`, opacity: 0 },
+        { opacity: .9, offset: .55 },
+        { transform: "translate(0, 0) rotate(0) scale(1)", opacity: 1 }
+      ], { duration: 1300, delay: 250 + i * 600, easing: "cubic-bezier(.45,.05,.2,1)", fill: "both" }));
+    });
+    const landed = 250 + 2 * 600 + 1300;
+    anims.push(tile.animate([{ opacity: 0, transform: "scale(.85)" }, { opacity: 1, transform: "scale(1)" }],
+      { duration: 900, delay: landed - 500, easing: "ease-out", fill: "both" }));
+    tile.style.transformOrigin = "64px 64px";
+    // the front thumb gets a little "press" once the stack is complete
+    anims.push(thumbs[2].animate([{ transform: "scale(1)" }, { transform: "scale(.9)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }],
+      { duration: 420, delay: landed + 60, easing: "ease-out", composite: "add" }));
+
+    reveals.forEach((el) => el.classList.remove("in"));
+    reveals.forEach((el, i) => setTimeout(() => el.classList.add("in"), landed - 350 + i * 140));
+  }
+  logo.addEventListener("click", play);
+  // wait for fonts and layout so the logo's position is final and the first frames get painted
+  if (document.readyState === "complete") play(); else addEventListener("load", play);
+
+  /* ---------- Demo ---------- */
+  const videos = [
+    ["Rain on a tin roof, 3 hours", "Quiet Hours", "1.2M views · 2 years ago", "3:00:00", ["#1e293b", "#0f766e"]],
+    ["I made sourdough every day for a month", "Crumb & Crust", "842K views · 5 days ago", "18:42", ["#7c2d12", "#f59e0b"]],
+    ["Restoring a 1978 synthesizer", "Bench Notes", "391K views · 3 weeks ago", "27:15", ["#312e81", "#db2777"]],
+    ["Night drive, no talking", "Long Road", "2.9M views · 1 year ago", "1:12:08", ["#020617", "#6366f1"]],
+    ["How do bridges actually stand up?", "Plain Physics", "5.1M views · 8 months ago", "14:03", ["#14532d", "#a3e635"]],
+    ["Cozy cabin, crackling fire", "Slow Rooms", "760K views · 4 months ago", "2:00:00", ["#431407", "#ea580c"]],
+    ["Learning the cello at 40, week 12", "Late Strings", "118K views · 2 days ago", "11:37", ["#3f3f46", "#e7e5e4"]],
+    ["The whole history of fonts in 20 minutes", "Glyph Club", "1.8M views · 6 months ago", "20:11", ["#0c4a6e", "#38bdf8"]]
+  ];
+  const $ = (id) => document.getElementById(id);
+  const demo = $("demo"), feed = $("feed"), hint = $("hint"), toastEl = $("toast");
+  let on = false, queue = [], toastT;
+
+  const d = new Date();
+  $("qday").textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  videos.forEach(([title, channel, stats, dur, [c1, c2]], i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.i = i;
+    card.innerHTML = `
+      <div class="thumb-img" style="background:linear-gradient(135deg,${c1},${c2})">
+        <span class="badge"></span><span class="dur">${dur}</span>
+      </div>
+      <div class="meta">
+        <div class="avatar" style="background:linear-gradient(135deg,${c2},${c1})"></div>
+        <div><h3>${title}</h3><p>${channel}<br>${stats}</p></div>
+      </div>`;
+    card.addEventListener("click", () => clickCard(card, i));
+    feed.appendChild(card);
+  });
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastT);
+    toastT = setTimeout(() => toastEl.classList.remove("show"), 2600);
+  }
+
+  function setMode(v) {
+    on = v;
+    demo.classList.toggle("on", on);
+    $("mode").setAttribute("aria-pressed", on);
+    $("modeText").textContent = on ? "Queue Mode on" : "Queue Mode off";
+    if (on) { hint.textContent = "Now click a few videos"; }
+    else if (queue.length) hint.classList.add("gone");
+  }
+
+  function clickCard(card, i) {
+    if (!on) {
+      const lost = document.createElement("div");
+      lost.className = "lost";
+      lost.textContent = "Opening video… there goes your feed";
+      card.querySelector(".thumb-img").appendChild(lost);
+      setTimeout(() => lost.remove(), 1400);
+      toast("Queue Mode is off, so this click opened the video and you lost your place.");
+      return;
+    }
+    hint.classList.add("gone");
+    const at = queue.indexOf(i);
+    if (at >= 0) queue.splice(at, 1); else queue.push(i);
+    render();
+    const c = $("count");
+    c.classList.remove("bump"); void c.offsetWidth; c.classList.add("bump");
+  }
+
+  function render() {
+    feed.querySelectorAll(".card").forEach((card) => {
+      const n = queue.indexOf(+card.dataset.i);
+      card.classList.toggle("q", n >= 0);
+      if (n >= 0) card.querySelector(".badge").textContent = `QUEUED #${n + 1}`;
+    });
+    $("count").textContent = queue.length;
+    $("qcount").textContent = `${queue.length} video${queue.length === 1 ? "" : "s"}`;
+    const list = $("qlist");
+    list.replaceChildren();
+    if (!queue.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "Nothing queued yet.";
+      list.appendChild(li);
+    }
+    queue.forEach((i, n) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="n">${n + 1}</span><span class="t"></span><button aria-label="Remove">×</button>`;
+      li.querySelector(".t").textContent = videos[i][0];
+      li.querySelector("button").onclick = () => { queue.splice(n, 1); render(); };
+      list.appendChild(li);
+    });
+  }
+
+  $("mode").onclick = () => setMode(!on);
+  $("count").onclick = () => $("qpanel").classList.toggle("open");
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#qpanel, #count")) $("qpanel").classList.remove("open");
+  });
+  $("qplay").onclick = () => toast(queue.length ? `On YouTube this plays all ${queue.length} as one playlist.` : "Queue a few videos first.");
+  $("qcopy").onclick = () => toast(queue.length ? "On YouTube this copies every link with its title." : "Queue a few videos first.");
+  $("qclear").onclick = () => { queue = []; render(); toast("Queue cleared. Today's playlist keeps them."); };
+  addEventListener("keydown", (e) => {
+    if (e.altKey && e.code === "KeyQ") { e.preventDefault(); setMode(!on); }
+    if (e.key === "Escape") $("qpanel").classList.remove("open");
+  });
+  render();
+
+  /* ---------- Install ---------- */
+  document.querySelectorAll('[role="tab"]').forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll('[role="tab"]').forEach((t) => {
+        const sel = t === tab;
+        t.setAttribute("aria-selected", sel);
+        $(t.getAttribute("aria-controls")).hidden = !sel;
+      });
+    };
+  });
+  // tick steps off as you go
+  document.querySelectorAll("#steps > li").forEach((li) => {
+    li.addEventListener("click", (e) => { if (!e.target.closest("a, button")) li.classList.toggle("done"); });
+    li.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => li.classList.add("done")));
+  });
+
+  async function copyText(text, btn, label) {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    btn.textContent = "Copied ✓"; btn.classList.add("ok");
+    setTimeout(() => { btn.textContent = label; btn.classList.remove("ok"); }, 1800);
+  }
+  document.querySelectorAll(".copy").forEach((b) => b.onclick = () => {
+    copyText(b.dataset.copy, b, "Copy");
+    b.closest("li")?.classList.add("done");
+  });
+  $("copyPrompt").onclick = (e) => copyText($("prompt").textContent, e.currentTarget, "Copy the prompt");
+})();
+</script>
+</body>
+</html>
